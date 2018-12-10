@@ -57,7 +57,7 @@ The same naming pattern is used for the other files.
 The video sequence to denoise must be extracted in a directory.
 Assuming the video to denoise is alone in the directory inputs/, you can denoise the sequence with:
 
-python3 test.py directory --net vnlnet_gray_20/net.pth --input inputs/ --output outputs/
+python3 test.py directory --net vnlnet_gray_20.pth --input inputs/ --output outputs/
 
 Assuming vnlnet_gray_20 corresponds to best network for your estimated noise.
 
@@ -76,7 +76,7 @@ Assuming the video is not alone in the directory inputs (and is named with the p
 or only a subset of frames need to be denoised (for example from 100 to 199),
 this command line can be used:
 
-python3 test.py pattern --net vnlnet_gray_20/net.pth --input_pattern inputs/video_%03d.png --output outputs/video_%03d.png --first 100 --last 199
+python3 test.py pattern --net vnlnet_gray_20.pth --input_pattern inputs/video_%03d.png --output outputs/video_%03d.png --first 100 --last 199
 
 
 **** Scoring Info ****
