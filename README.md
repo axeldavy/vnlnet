@@ -9,7 +9,16 @@ https://arxiv.org/abs/1811.12758
 If you use any part of our code for another project, please cite our paper.
 
 
-The code to reproduce the training database should be released soon.
+The code to reproduce the training database is available here:
+https://github.com/cmla/f16-video-set
+
+The code to reproduce our davis test-dev test set is available here:
+https://github.com/cmla/downscaled-davis-dataset
+
+The data of the second testing set should be available soon.
+
+
+Similarly, if you use any part of these codes for another project, please cite our paper.
 
 
 **** Requirements ****
