@@ -50,6 +50,8 @@ if __name__ == '__main__':
         print(f, psnr_img)
         psnr += psnr_img
 
+        ref = np.asarray(ref, dtype=np.float64)
+        img = np.asarray(img, dtype=np.float64)
         acc += np.sum(np.square(ref - img))
         acc2 += np.sum((ref >= 1 )*1.)
     print('Average PSNR: ', psnr/len(files))
