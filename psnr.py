@@ -46,6 +46,8 @@ if __name__ == '__main__':
             img = tifffile.imread(args.imgdir + '/' + f[:-3] + 'tiff')
         else:
             continue
+        ref = np.squeeze(ref)
+        img = np.squeeze(img)
         psnr_img = compare_psnr(ref, img, data_range=255)
         print(f, psnr_img)
         psnr += psnr_img
