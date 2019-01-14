@@ -53,7 +53,7 @@ if __name__ == '__main__':
         ref = np.asarray(ref, dtype=np.float64)
         img = np.asarray(img, dtype=np.float64)
         acc += np.sum(np.square(ref - img))
-        acc2 += np.sum((ref >= 1 )*1.)
+        acc2 += ref.size
     print('Average PSNR: ', psnr/len(files))
     # The PSNR below is the correct one for video
     print('PSNR on the sequence: ', 10 * np.log10((255. ** 2) / (acc[0]/acc2[0])))
