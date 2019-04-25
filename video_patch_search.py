@@ -78,8 +78,7 @@ class VideoPatchSearch():
         program = cl.Program(ctx, fstr).build(options=build_options)
 
         self.compute_nn = program.compute_nearest_neighbors_by_convolution
-        #self.compute_nn = program.compute_nearest_neighbors_naive
-        self.compute_nn.set_scalar_arg_dtypes([None, None, np.int32, np.int32, np.int32, np.int32, np.int32, np.int32, np.float32, np.int32, np.int32])
+        self.compute_nn.set_scalar_arg_dtypes([None, None, np.int32, np.int32, np.int32, np.int32, np.int32, np.int32, np.int32, np.int32])
 
         self.ctx = ctx
         self.queue = queue
@@ -105,6 +104,7 @@ class VideoPatchSearch():
            data patches with same patch center (see comments in the code for more details).
            The indices convert to (y, x) by doing indice / width and indice % width.
         """
+
         assert(video.dtype.type == self.input_dtype)
         assert(len(video.shape) == 3 or (len(video.shape) == 4 and video.shape[3] == 1))
 
@@ -127,7 +127,7 @@ class VideoPatchSearch():
         #global_size = [w, h]
         #local_size = None
 
-        self.compute_nn(self.queue, global_size, local_size, dst_pos_cl, video_cl, w, h, w, w*h, 0, 0, np.inf, num_frame*w*h, 0)
+        self.compute_nn(self.queue, global_size, local_size, dst_pos_cl, video_cl, w, h, w, w*h, 0, 0, num_frame*w*h, 0)
 
         dst_pos = np.empty([h // self.step, w // self.step, self.num_neighbors], dtype=np.uint32)
         cl.enqueue_copy(self.queue, dst_pos, dst_pos_cl)

@@ -83,58 +83,25 @@
         res = op(res, name[it]); \
     }
 
-//#define OUT_OF_ORDER_WEIGHTS
-#ifdef OUT_OF_ORDER_WEIGHTS
 
-#define maintain_best_weights(best_nn_patches_weights, \
-                              best_nn_patches_offsets, \
-                              num_neighbors_to_track, \
+#define maintain_best_weight(best_nn_patches_weight, \
+                              best_nn_patches_offset, \
                               should_check_overlap, \
-                              should_check_threshold, \
-                              threshold_search, \
                               patch_weight, \
                               patch_offset) \
 unroll_loop() \
 for (int mbw_for = 0; mbw_for < 1; mbw_for++) { \
-    /* These two ifs should be removed at compilation, because the \
-     * booleans values are always the same. Similarly, unrolling \
-     * is possible because num_neighbors_to_track is fixed. */ \
     if (should_check_overlap) { \
-        bool mbw_already_there = false; \
-        unroll_loop() \
-        for (int mbw_i = 0; mbw_i < num_neighbors_to_track; mbw_i++) { \
-            mbw_already_there = (best_nn_patches_offsets[mbw_i] == patch_offset) ? true : mbw_already_there; \
-        } \
-        if (mbw_already_there) { \
+        if (best_nn_patches_offset == patch_offset) { \
             break; \
         } \
     } \
  \
-    if (should_check_threshold) { \
-        if (patch_weight > convert_WT(threshold_search)) { \
-            break; \
-        } \
-    } \
- \
-    /* Maintain best weights. Note they are positive. \
-     * First find suitable location by looking at the maximum value. \
-     * Second, if below maximum value, replace it. */ \
-    WT mbw_max_patch_weights; \
-    reduce_op_on_table(mbw_max_patch_weights, fmax, best_nn_patches_weights, num_neighbors_to_track); \
-    if (patch_weight < mbw_max_patch_weights) { \
-        unroll_loop() \
-        for (int mbw_i = 0; mbw_i < num_neighbors_to_track; mbw_i++) { \
-            if (best_nn_patches_weights[mbw_i] == mbw_max_patch_weights) { \
-                best_nn_patches_weights[mbw_i] = patch_weight; \
-                best_nn_patches_offsets[mbw_i] = patch_offset; \
-                /* Equivalent to 'break;', which on some targets results in more generated code and slower performance */ \
-                mbw_max_patch_weights = UNUSED_WEIGHT; \
-            } \
-        } \
+    if (patch_weight < best_nn_patches_weight) { \
+        best_nn_patches_weight = patch_weight; \
+        best_nn_patches_offset = patch_offset; \
     } \
 }
-
-#else
 
 #define maintain_best_weights(best_nn_patches_weights, \
                               best_nn_patches_offsets, \
@@ -183,38 +150,19 @@ for (int mbw_for = 0; mbw_for < 1; mbw_for++) { \
     } \
 }
 
-#endif
 
-inline void write_neighbors(__global int * restrict dst_pos,
-                            __private WT (*best_nn_patches_weights)[NUM_NEIGHBORS],
-                            __private int (*best_nn_patches_offsets)[NUM_NEIGHBORS],
+inline void write_neighbor_index(__global int * restrict dst_pos,
+                            int offset,
+                            int num_neighbor,
                             int dst_offset,
                             int w,
                             int y_corner_top_left,
-                            int x_corner_top_left,
-                            int reference_offset)
+                            int x_corner_top_left)
 {
-    float sum_patches_weights;
-    /* Make reference patch first neighbor.
-     * Important if out of order, or very flat region */
-    if ((*best_nn_patches_offsets)[0] != reference_offset) {
-        /* Note: reference offset is max once */
-        #pragma unroll
-        for (int i = 1; i < NUM_NEIGHBORS; i++) {
-            bool match = (*best_nn_patches_offsets)[i] == reference_offset;
-            (*best_nn_patches_offsets)[i] = match ? (*best_nn_patches_offsets)[0] : (*best_nn_patches_offsets)[i];
-        }
-        /* If there was the reference offset, then we are exchanging the positions.
-         * Else if there isn't the reference offset, all must have weight 0 (flat region),
-         * thus remove one and replace by reference offset */
-        (*best_nn_patches_offsets)[0] = reference_offset;
-    }
-
-    #pragma unroll
-    for (int i = 0; i < NUM_NEIGHBORS; i++) {
-        dst_pos[dst_offset+((w / PATCH_AGGREGATION_STEP)*(y_corner_top_left / PATCH_AGGREGATION_STEP)+(x_corner_top_left / PATCH_AGGREGATION_STEP))*NUM_NEIGHBORS+i] = (*best_nn_patches_offsets)[i];
-    }
+    dst_pos[dst_offset+((w / PATCH_AGGREGATION_STEP)*(y_corner_top_left / PATCH_AGGREGATION_STEP)+(x_corner_top_left / PATCH_AGGREGATION_STEP))*NUM_NEIGHBORS+num_neighbor] = offset;
 }
+
+
 
 
 #ifndef WK_SIZE
@@ -239,7 +187,6 @@ __kernel __attribute__((reqd_work_group_size(1, WK_SIZE, 1))) void compute_neare
                                                                                                              int items_img,
                                                                                                              int search_offset_x,
                                                                                                              int search_offset_y,
-                                                                                                             float threshold_search,
                                                                                                              int src_offset,
                                                                                                              int dst_offset)
 {
@@ -254,14 +201,6 @@ __kernel __attribute__((reqd_work_group_size(1, WK_SIZE, 1))) void compute_neare
     bool is_patch_first_column_inside_image = (x_corner_top_left < w) && (y_corner_top_left + PATCH_WIDTH <= h);
     bool is_patch_inside_image = (x_corner_top_left <= w-PATCH_WIDTH) && (y_corner_top_left + PATCH_WIDTH <= h);
     bool write_result = (x_corner_top_left % PATCH_AGGREGATION_STEP == 0) && is_patch_inside_image && not_overlap;
-
-    __private int best_nn_patches_offsets[NUM_NEIGHBORS];
-    __private WT best_nn_patches_weights[NUM_NEIGHBORS];
-    #pragma unroll
-    for (int i = 0; i < NUM_NEIGHBORS; i++) {
-        best_nn_patches_offsets[i] = 0x7FFFFFFF;
-        best_nn_patches_weights[i] = INFINITY;
-    }
 
     /* We are allowed to do that even if we use barriers,
      * because all work items in the work group
@@ -280,6 +219,19 @@ __kernel __attribute__((reqd_work_group_size(1, WK_SIZE, 1))) void compute_neare
 
     for (int dz = -WINDOW_SEARCH_FRAMES_PAST; dz <= WINDOW_SEARCH_FRAMES_FUTURE; dz++) {
         __global const SRC_TYPE * restrict src_comp = src + src_offset + dz * items_img;
+        int best_nn_patches_offset = 0x7FFFFFFF;
+        WT best_nn_patches_weight = INFINITY;
+        if (dz == 0) {
+            best_nn_patches_offset = src_offset+items_row*(y_corner_top_left)+x_corner_top_left;
+            if (write_result) {
+                write_neighbor_index(dst_pos,
+                               best_nn_patches_offset,
+                               dz+WINDOW_SEARCH_FRAMES_PAST,
+                               dst_offset,
+                               w, y_corner_top_left, x_corner_top_left);
+            }
+            continue;
+        }
 #ifdef USE_CACHE
         for (int row = 0; row < PATCH_WIDTH; row++) {
                 #pragma unroll
@@ -324,109 +276,20 @@ __kernel __attribute__((reqd_work_group_size(1, WK_SIZE, 1))) void compute_neare
                 }
                 barrier(CLK_LOCAL_MEM_FENCE);
                 if (write_result) {
-                    maintain_best_weights(best_nn_patches_weights,
-                                          best_nn_patches_offsets,
-                                          NUM_NEIGHBORS,
-                                          false,
-                                          true,
-                                          threshold_search,
-                                          patch_weight,
-                                          src_offset+items_img*dz+items_row*(y_corner_top_left+dy)+x_corner_top_left+dx);
+                    maintain_best_weight(best_nn_patches_weight,
+                                         best_nn_patches_offset,
+                                         false,
+                                         patch_weight,
+                                         src_offset+items_img*dz+items_row*(y_corner_top_left+dy)+x_corner_top_left+dx);
                 }
             }
         }
-    }
-
-    if (write_result) {
-        write_neighbors(dst_pos,
-                        &best_nn_patches_weights,
-                        &best_nn_patches_offsets,
-                        dst_offset,
-                        w, y_corner_top_left, x_corner_top_left,
-                        src_offset+items_row*y_corner_top_left+x_corner_top_left);
-    }
-}
-
-#if 1
-__kernel void compute_nearest_neighbors_naive(__global int * restrict dst_pos,
-                                               __global const SRC_TYPE * restrict src,
-                                               int w,
-                                               int h,
-                                               int items_row,
-                                               int items_img,
-                                               int search_offset_x,
-                                               int search_offset_y,
-                                               float threshold_search,
-                                               int src_offset,
-                                               int dst_offset)
-{
-    int x_corner_top_left = get_global_id(0);
-    int y_corner_top_left = get_global_id(1);
-
-    x_corner_top_left *= PATCH_AGGREGATION_STEP;
-    y_corner_top_left *= PATCH_AGGREGATION_STEP;
-
-    x_corner_top_left += search_offset_x;
-    y_corner_top_left += search_offset_y;
-
-    /* The usual check if the global work region is bigger than the work region */
-    if (x_corner_top_left+PATCH_WIDTH > w || y_corner_top_left+PATCH_WIDTH > h) {
-        return;
-    }
-
-    __private int best_nn_patches_offsets[NUM_NEIGHBORS];
-    __private WT best_nn_patches_weights[NUM_NEIGHBORS];
-    #pragma unroll
-    for (int i = 0; i < NUM_NEIGHBORS; i++) {
-        best_nn_patches_offsets[i] = 0x7FFFFFFF;
-        best_nn_patches_weights[i] = INFINITY;
-    }
-
-    for (int dz = -WINDOW_SEARCH_FRAMES_PAST; dz <= WINDOW_SEARCH_FRAMES_FUTURE; dz++) {
-        __global const SRC_TYPE * restrict src_comp = src + src_offset + dz * items_img;
-        for (int dx = START_WINDOW; dx < END_WINDOW; dx++) {
-            for (int dy = START_WINDOW; dy < END_WINDOW; dy++) {
-                int target_x = x_corner_top_left + dx;
-                int target_y = y_corner_top_left + dy;
-                /* No barriers, we are allowed to do that */
-                if (target_y < 0 ||
-                    target_y+PATCH_WIDTH > h ||
-                    target_x < 0 ||
-                    target_x+PATCH_WIDTH > w) {
-                    continue;
-                }
-
-                WT patch_weight = 0.f;
-                for (int j = 0; j < PATCH_WIDTH; j++) {
-                    #pragma unroll
-                    for (int i = 0; i < PATCH_WIDTH; i++) {
-                        WT compared_data = convert_WT(src_comp[items_row*(target_y+j)+target_x+i]);
-                        WT main_data = convert_WT(src[src_offset+items_row*(y_corner_top_left+j)+x_corner_top_left+i]);
-#ifdef NORM_L1
-                        patch_weight += fabs(compared_data - main_data);
-#else
-                        WT diff = compared_data - main_data;
-                        patch_weight += diff * diff;
-#endif
-                    }
-                }
-                maintain_best_weights(best_nn_patches_weights,
-                                      best_nn_patches_offsets,
-                                      NUM_NEIGHBORS,
-                                      false,
-                                      true,
-                                      threshold_search,
-                                      patch_weight,
-                                      src_offset+items_img*dz+items_row*target_y+target_x);
-            }
+        if (write_result) {
+            write_neighbor_index(dst_pos,
+                           best_nn_patches_offset,
+                           dz+WINDOW_SEARCH_FRAMES_PAST,
+                           dst_offset,
+                           w, y_corner_top_left, x_corner_top_left);
         }
     }
-
-    write_neighbors(dst_pos,
-                    &best_nn_patches_weights,
-                    &best_nn_patches_offsets,
-                    dst_offset,
-                    w, y_corner_top_left, x_corner_top_left,
-                    src_offset+items_row*y_corner_top_left+x_corner_top_left);
 }
-#endif
