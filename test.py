@@ -153,6 +153,13 @@ def test(training_args, model_state_dict, video, foutnames, only_frame, cuda, ad
 
     video_noised_bigger[temporal_slice, border_size:-border_size, border_size:-border_size, :] = video_noised[:,:,:,:]
 
+    # Replace black frames with future (or past frames)
+    # Make it so different frames are seen during denoising
+    for i in range(training_args.past_frames):
+        video_noised_bigger[i, border_size:-border_size, border_size:-border_size, :] = video_noised_bigger[training_args.past_frames+training_args.future_frames+1+i, border_size:-border_size, border_size:-border_size, :]
+    for i in range(training_args.future_frames):
+        video_noised_bigger[-i, border_size:-border_size, border_size:-border_size, :] = video_noised_bigger[-(training_args.past_frames+training_args.future_frames+1+i), border_size:-border_size, border_size:-border_size, :]
+
     if training_args.oracle_mode == 1:
         assert(add_noise)
         video_bigger = np.zeros([video.shape[0] + training_args.past_frames + training_args.future_frames, video.shape[1] + training_args.nn_patch_width-1, video.shape[2] + training_args.nn_patch_width-1, video.shape[3]], dtype=np.float32)
