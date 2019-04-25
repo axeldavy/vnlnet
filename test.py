@@ -61,7 +61,7 @@ def load_file(f, gray):
     should be gray
     """
     if f[-4:] == 'tiff' or f[-3:] == 'tif':
-        tifffile.imread(f)
+        img = tifffile.imread(f)
     else:
         img = imageio.imread(f)
     if len(img.shape) == 2:
