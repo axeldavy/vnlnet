@@ -210,12 +210,13 @@ def test(training_args, model_state_dict, video, foutnames, only_frame, cuda, ad
             # If one needs the noisy frames, uncomment
             if add_noise:
                 mkdir_p('test_input')
-                write_file('test_input/' + files[i], 255. * video[i, :, :, :])
+                filename = os.path.basename(foutnames[i])
+                write_file('test_input/' + filename, 255. * video[i, :, :, :])
                 mkdir_p('test_input_noisy')
                 img_noised = img_noised.data.cpu().numpy()[0]
                 img_noised = 255 * img_noised.transpose(1, 2, 0)
-                write_file('test_input_noisy/' + files[i], img_noised)
-                write_file('test_input_noisy/' + files[i][:-3]+'tiff', img_noised)
+                write_file('test_input_noisy/' + filename, img_noised)
+                write_file('test_input_noisy/' + filename[:-3]+'tiff', img_noised)
             """
 
 if __name__ == "__main__":
