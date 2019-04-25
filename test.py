@@ -70,6 +70,7 @@ def load_file(f, gray):
     if gray and img.shape[2] > 1:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = np.expand_dims(img, 2)
+    assert(img.shape[2] == 1 or img.shape[2] == 3) # Gray or RGB. Please convert RGBA to RGB.
     img = np.asarray(img, dtype=np.float32)
     img = img/255.
 
