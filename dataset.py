@@ -120,7 +120,7 @@ class Dataset(udata.Dataset):
 
                 nn = self.ps.compute(video_search_gray, self.past_frames)
 
-                self.videos.append((ref_image, video_noised, nn))
+                self.videos.append((video_noised[self.past_frames, ...] - ref_image, video_noised, nn))
                 ys = range(2*self.patch_width, ref_image.shape[0]-2*self.patch_width, self.patch_stride)
                 xs = range(2*self.patch_width, ref_image.shape[1]-2*self.patch_width, self.patch_stride)
                 xx, yy = np.meshgrid(xs, ys)
@@ -149,17 +149,15 @@ class Dataset(udata.Dataset):
         x = key[1]
         y = key[2]
         anchor = self.patch_width_nn//2
-        patch_clean = self.videos[i][0][(y-patch_width):y, (x-patch_width):x,:]
-        patch_noised = self.videos[i][1][self.past_frames, (y-patch_width):y, (x-patch_width):x,:]
+        noise = self.videos[i][0][(y-patch_width):y, (x-patch_width):x,:]
 
         if self.pass_nn_value:
             nn_patch = self.videos[i][2][(y-anchor-patch_width):(y-anchor), (x-anchor-patch_width):(x-anchor),:]
             patch_stack = self.ps.build_neighbors_array(self.videos[i][1], nn_patch)
         else:
-            patch_stack = patch_noised
+            patch_stack = self.videos[i][1][self.past_frames, (y-patch_width):y, (x-patch_width):x,:]
 
         patch_stack = patch_stack.transpose(2, 0, 1)
-        patch_noised = patch_noised.transpose(2, 0, 1)
-        patch_clean = patch_clean.transpose(2, 0, 1)
+        noise = noise.transpose(2, 0, 1)
 
-        return (torch.Tensor(patch_stack), torch.Tensor(patch_noised), torch.Tensor(patch_clean))
+        return (torch.Tensor(patch_stack), torch.Tensor(noise))

@@ -69,6 +69,8 @@ def main(args):
                           pass_nn_value=args.pass_nn_value, patch_stride=20)
     loader_train = DataLoader(dataset=dataset_train, num_workers=2, \
                               batch_size=args.batch_size, shuffle=True)
+    loader_val = DataLoader(dataset=dataset_val, num_workers=2, \
+                              batch_size=args.batch_size, shuffle=False)
     print('\t# of training samples: %d\n' % int(len(dataset_train)))
 
     if not os.path.exists(args.save_dir):
@@ -114,30 +116,28 @@ def main(args):
             for param_group in optimizer.param_groups:
                 param_group['lr'] = current_lr
 
-        # train over all data in the epoch
+         # train over all data in the epoch
         for i, data in enumerate(loader_train, 0):
             # Pre-training step
             model.train()
             model.zero_grad()
             optimizer.zero_grad()
 
-            (imgn_stack_train, imgn_train, img_train) = data
+            (stack_train, expected_train) = data
 
-            img_train = Variable(img_train.cuda(), volatile=True)
-            imgn_train = Variable(imgn_train.cuda(), volatile=True)
-            imgn_stack_train = Variable(imgn_stack_train.cuda(), volatile=True)
+            stack_train = Variable(stack_train.cuda(), volatile=True)
+            expected_train = Variable(expected_train.cuda(), volatile=True)
 
             # Evaluate model and optimize it
-            out_train = model(imgn_stack_train)
-            loss = criterion(out_train, imgn_train-img_train) / (img_train.size()[0]*2)
+            out_train = model(stack_train)
+            loss = criterion(out_train, expected_train) / (expected_train.size()[0]*2)
             loss.backward()
             optimizer.step()
 
             if step % 10 == 0:
                 # Results
                 model.eval()
-                img_predict = torch.clamp(imgn_train-out_train, 0., 1.)
-                psnr_train = batch_PSNR(img_predict, img_train, 1.)
+                psnr_train = batch_PSNR(expected_train, out_train, 1.)
                 print('[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f' %\
                     (epoch+1, i+1, len(loader_train), loss.item(), psnr_train))
                 # Log the scalar values
@@ -147,18 +147,16 @@ def main(args):
 
         model.eval()
         psnr_val = 0
-        for valimg in dataset_val:
-            with torch.no_grad():
-                (imgn_stack_val, imgn_val, img_val) = valimg
-                imgn_stack_val = torch.unsqueeze(imgn_stack_val, 0)
-                imgn_val = torch.unsqueeze(imgn_val, 0)
-                img_val = torch.unsqueeze(img_val, 0)
-                img_val, imgn_val = Variable(img_val.cuda()), Variable(imgn_val.cuda())
-                imgn_stack_val = Variable(imgn_stack_val.cuda())
-                out_val = model(imgn_stack_val)
-                img_predict = torch.clamp(imgn_val-out_val, 0., 1.)
-                psnr_val += batch_PSNR(img_predict, img_val, 1.)
+        with torch.no_grad():
+            for i, data in enumerate(loader_val, 0):
+                (stack_val, expected_val) = data
+                stack_val = Variable(stack_val.cuda())
+                expected_val = Variable(expected_val.cuda())
+                out_val = model(stack_val)
+                psnr_val += batch_PSNR(out_val, expected_val, 1.)
         psnr_val /= len(dataset_val)
+        psnr_val *= args.batch_size
+
         print('\n[epoch %d] PSNR_val: %.4f' % (epoch+1, psnr_val))
         writer.add_scalar('PSNR on validation data', psnr_val, epoch)
         writer.add_scalar('Learning rate', current_lr, epoch)
