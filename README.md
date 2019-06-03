@@ -33,11 +33,14 @@ pyopencl
 OpenCL >= 1.2
 CUDA (for training)
 
+You can install the python requirements with:
+pip install -r requirements.txt --user
 
 **** General Info ****
 
 
 The patch search is implemented in OpenCL. To run the code, a valid OpenCL driver is required. A CPU OpenCL driver can be used for testing, even though the code was tuned for GPUs.
+For example, on Ubuntu and NVidia GPU, you must install nvidia-opencl-dev.
 
 If using CUDA, please notice that CUDA_VISIBLE_DEVICES also affects the visible OpenCL devices.
 
