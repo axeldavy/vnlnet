@@ -80,10 +80,10 @@ def main(args):
     # Create model
     args.input_channels = dataset_train.data_num_channels()
     args.output_channels = (3 if args.color else 1)
-    args.nlconv_features = 32
+    args.nlconv_features = (96 if args.color else 32)
     args.nlconv_layers = 4
-    args.dnnconv_features = (96 if args.color else 64) # Just like FFDNet
-    args.dnnconv_layers = (12 if args.color else 15) # Just like FFDNet
+    args.dnnconv_features = (192 if args.color else 64)
+    args.dnnconv_layers = 15
     model = ModifiedDnCNN(input_channels=args.input_channels,
                           output_channels=args.output_channels,
                           nlconv_features=args.nlconv_features,
