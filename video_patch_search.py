@@ -35,6 +35,10 @@ src_type_parameter = {
     np.float32 : '-DSRC_TYPE=float'
 }
 
+def is_cpu(ctx):
+    device = ctx.devices[0]
+    return device.get_info(cl.device_info.TYPE) == 2
+
 def DIVUP(a, b):
     return int(math.ceil( float(a) / float(b)))
 
@@ -68,7 +72,7 @@ class VideoPatchSearch():
         build_options += ' -DWINDOW_SEARCH_FRAMES_PAST=' + ("%d" % past_frames)
         build_options += ' -DWINDOW_SEARCH_FRAMES_FUTURE=' + ("%d" % future_frames)
         build_options += ' ' + src_type_parameter[input_dtype] #video.dtype.type
-        if search_width <= 256:
+        if search_width <= 256 and not(is_cpu(ctx)):
             wksize = 128
             build_options += ' -DUSE_CACHE -DWK_SIZE=' + ("%d" %  wksize)
         else:
