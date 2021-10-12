@@ -2,7 +2,7 @@ numpy==1.16
 pyopencl==2018.2.4
 imageio==2.4
 Cython==0.23
-opencv-python==4.0.0
+opencv-python==4.2.0.32
 tensorboardX==1.4
 torch==0.4.1
 torchvision==0.2.1
