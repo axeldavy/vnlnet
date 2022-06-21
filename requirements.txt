@@ -1,4 +1,4 @@
-numpy==1.16
+numpy==1.22.0
 pyopencl==2018.2.4
 imageio==2.4
 Cython==0.23
